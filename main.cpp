@@ -500,6 +500,16 @@ Vector3 ClosestPoint(const Vector3& point, const Segment& segment) {
 	return closestpoint;
 }
 
+bool IsCollision(const Sphere& s1, const Sphere& s2) {
+	//2つの球の中心点間の距離を求める
+	float distance = Length(Subtract(s2.center, s1.center));
+	//半径の合計より短ければ衝突
+	if (distance <= s1.radius + s2.radius) {
+		return true;
+	}
+	return false;
+}
+
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
@@ -508,12 +518,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	const int kWindowWidth = 1280;
 	const int kWindowHeight = 720;
 
-	Segment segment{
-	    {-2.0f, -1.0f, 0.0f},
-	    {3.0f,  2.0f,  2.0f},
-	};
-
-	Vector3 point{-1.5f, 0.6f, 0.6f};
+	Sphere sphere[2] = {
+		{{0, 0, 0}, 0.5}, {{1, 0, 1}, 0.5}
+    };
+	unsigned int color = WHITE;
 
 	Vector3 cameraTranslate{0.0f, 1.9f, -6.49f};
 	Vector3 cameraRotate{0.26f, 0.0f, 0.0f};
@@ -535,18 +543,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		/// ↓更新処理ここから
 		///
 
-		Vector3 project = Project(Subtract(point, segment.origin), segment.diff);
-		Vector3 closestPoint = ClosestPoint(point, segment);
-
 		// WorldMatrix
 		Matrix4x4 worldMatrix =
 		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f});
-		Matrix4x4 pointWorldMatrix =
-		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, point);
-		Matrix4x4 closestPointWorldMatrix =
-		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, closestPoint);
 		Matrix4x4 cameraMatrix =
 		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, cameraRotate, cameraTranslate);
+		Matrix4x4 sphereWorldMatrix1 =
+		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {sphere[0].center});
+		Matrix4x4 sphereWorldMatrix2 =
+		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {sphere[1].center});
 
 		// ViewMatrix
 		Matrix4x4 viewMatrix = Inverse(cameraMatrix);
@@ -554,24 +559,30 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		// ProjectionMatrix
 		Matrix4x4 projectionMatrix = MakePerspectiveFovMatrix(
 		    0.45f, float(kWindowWidth) / float(kWindowHeight), 0.1f, 100.0f);
-
+		
 		// WVPMatrix
 		Matrix4x4 worldViewprojectionMatrix =
 		    Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
-		Matrix4x4 pointWorldViewProjectionMatrix =
-		    Multiply(pointWorldMatrix, Multiply(viewMatrix, projectionMatrix));
-		Matrix4x4 closestPointWorldViewProjectionMatrix =
-		    Multiply(closestPointWorldMatrix, Multiply(viewMatrix, projectionMatrix));
-
+		Matrix4x4 sphereWorldViewprojectionMatrix1 =
+		    Multiply(sphereWorldMatrix1, Multiply(viewMatrix, projectionMatrix));
+		Matrix4x4 sphereWorldViewprojectionMatrix2 =
+		    Multiply(sphereWorldMatrix2, Multiply(viewMatrix, projectionMatrix));
+		
 		// ViewportMatrixを作る
 		Matrix4x4 viewportMatrix = MakeViewportMatrix(0, 0, 1280.0f, 720.0f, 0.0f, 1.0f);
 
+		if (IsCollision(sphere[0], sphere[1])) {
+			color = RED;
+		}
+		else {
+			color = WHITE;
+		}
+
 		ImGui::Begin("Window");
-		ImGui::InputFloat3("point", &point.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
-		ImGui::InputFloat3(
-		    "SegmentOrigin", &segment.origin.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
-		ImGui::InputFloat3("SegmentDiff", &segment.diff.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
-		ImGui::InputFloat3("project", &project.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
+		ImGui::DragFloat3("sphere[0].center", &sphere[0].center.x, 0.01f);
+		ImGui::DragFloat("sphere[0].radius", &sphere[0].radius, 0.01f);
+		ImGui::DragFloat3("sphere[1].center", &sphere[1].center.x, 0.01f);
+		ImGui::DragFloat("sphere[1].radius", &sphere[1].radius, 0.01f);
 		ImGui::End();
 
 		///
@@ -583,17 +594,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 
 		DrawGrid(worldViewprojectionMatrix, viewportMatrix);
-		Vector3 start =
-		    Transform(Transform(segment.origin, worldViewprojectionMatrix), viewportMatrix);
-		Vector3 end = Transform(
-		    Transform(Add(segment.origin, segment.diff), worldViewprojectionMatrix),
-		    viewportMatrix);
-		Novice::DrawLine(int(start.x), int(start.y), int(end.x), int(end.y), WHITE);
-		Sphere pointSphere{point, 0.01f};               // 1cmの球を描画
-		Sphere closestPointSphere{closestPoint, 0.01f}; // 1cmの球を描画
-		DrawSphere(pointSphere, pointWorldViewProjectionMatrix, viewportMatrix, RED);
-		DrawSphere(
-		    closestPointSphere, closestPointWorldViewProjectionMatrix, viewportMatrix, BLACK);
+		DrawSphere(sphere[0], sphereWorldViewprojectionMatrix1, viewportMatrix, color);
+		DrawSphere(sphere[1], sphereWorldViewprojectionMatrix2, viewportMatrix, WHITE);
 
 		///
 		/// ↑描画処理ここまで
