@@ -23,6 +23,11 @@ struct Plane {
 	float distance; // 距離
 };
 
+struct AABB {
+	Vector3 min;//最小点
+	Vector3 max;//最大点
+};
+
 Vector3 Add(const Vector3& v1, const Vector3& v2) {
 	Vector3 result;
 	result.x = v1.x + v2.x;
@@ -542,6 +547,15 @@ bool IsCollision(const Sphere& sphere, const Plane& plane) {
 	return false;
 }
 
+bool IsCollision(const AABB& aabb1, const AABB& aabb2) {
+	if ((aabb1.min.x <= aabb2.max.x && aabb1.max.x >= aabb2.min.x)&&
+		(aabb1.min.y <= aabb2.max.y && aabb1.max.y >= aabb2.min.y) &&
+		(aabb1.min.z <= aabb2.max.z && aabb1.max.z >= aabb2.min.z)){
+		return true;
+	}
+	return false;
+}
+
 Vector3 Perpendicular(const Vector3& vector) {
 	if (vector.x != 0.0f || vector.y != 0.0f) {
 		return {-vector.y, vector.x, 0.0f};
@@ -570,6 +584,52 @@ void DrawPlane(
 	Novice::DrawLine(int(points[1].x), int(points[1].y), int(points[3].x), int(points[3].y), color);
 }
 
+void DrawAABB(
+	const AABB& aabb, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix,
+	uint32_t color) {
+	Vector3 frontLeftTop = {aabb.min.x, aabb.max.y, aabb.min.z};
+	Vector3 frontRightTop = {aabb.max.x, aabb.max.y, aabb.min.z};
+	Vector3 frontLeftBottom = {aabb.min.x, aabb.min.y, aabb.min.z};
+	Vector3 frontRightBottom = {aabb.max.x, aabb.min.y, aabb.min.z};
+	Vector3 backLeftTop = {aabb.min.x, aabb.max.y, aabb.max.z};
+	Vector3 backRightTop = {aabb.max.x, aabb.max.y, aabb.max.z};
+	Vector3 backLeftBottom = {aabb.min.x, aabb.min.y, aabb.max.z};
+	Vector3 backRightBottom = {aabb.max.x, aabb.min.y, aabb.max.z};
+	Vector3 screenVertices[8];
+	screenVertices[0] = Transform(Transform(frontLeftTop, viewProjectionMatrix), viewportMatrix);
+	screenVertices[1] = Transform(Transform(frontRightTop, viewProjectionMatrix), viewportMatrix);
+	screenVertices[2] = Transform(Transform(frontLeftBottom, viewProjectionMatrix), viewportMatrix);
+	screenVertices[3] = Transform(Transform(frontRightBottom, viewProjectionMatrix), viewportMatrix);
+	screenVertices[4] = Transform(Transform(backLeftTop, viewProjectionMatrix), viewportMatrix);
+	screenVertices[5] = Transform(Transform(backRightTop, viewProjectionMatrix), viewportMatrix);
+	screenVertices[6] = Transform(Transform(backLeftBottom, viewProjectionMatrix), viewportMatrix);
+	screenVertices[7] = Transform(Transform(backRightBottom, viewProjectionMatrix), viewportMatrix);
+	Novice::DrawLine(
+	    int(screenVertices[0].x), int(screenVertices[0].y), int(screenVertices[1].x), int(screenVertices[1].y), color);
+	Novice::DrawLine(
+	    int(screenVertices[1].x), int(screenVertices[1].y), int(screenVertices[3].x), int(screenVertices[3].y), color);
+	Novice::DrawLine(
+	    int(screenVertices[3].x), int(screenVertices[3].y), int(screenVertices[2].x), int(screenVertices[2].y), color);
+	Novice::DrawLine(
+	    int(screenVertices[2].x), int(screenVertices[2].y), int(screenVertices[0].x), int(screenVertices[0].y), color);
+	Novice::DrawLine(
+	    int(screenVertices[0].x), int(screenVertices[0].y), int(screenVertices[4].x), int(screenVertices[4].y), color);
+	Novice::DrawLine(
+	    int(screenVertices[1].x), int(screenVertices[1].y), int(screenVertices[5].x), int(screenVertices[5].y), color);
+	Novice::DrawLine(
+	    int(screenVertices[2].x), int(screenVertices[2].y), int(screenVertices[6].x), int(screenVertices[6].y), color);
+	Novice::DrawLine(
+	    int(screenVertices[3].x), int(screenVertices[3].y), int(screenVertices[7].x), int(screenVertices[7].y), color);
+	Novice::DrawLine(
+	    int(screenVertices[4].x), int(screenVertices[4].y), int(screenVertices[5].x), int(screenVertices[5].y), color);
+	Novice::DrawLine(
+	    int(screenVertices[5].x), int(screenVertices[5].y), int(screenVertices[7].x), int(screenVertices[7].y), color);
+	Novice::DrawLine(
+	    int(screenVertices[7].x), int(screenVertices[7].y), int(screenVertices[6].x), int(screenVertices[6].y), color);
+	Novice::DrawLine(
+	    int(screenVertices[6].x), int(screenVertices[6].y), int(screenVertices[4].x), int(screenVertices[4].y), color);
+}
+
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
@@ -578,15 +638,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	const int kWindowWidth = 1280;
 	const int kWindowHeight = 720;
 
-	Sphere sphere = {
-	    {0.0f, 0.0f, 0.0f},
-        1.0f
-    };
-
-	Plane plane = {
-	    {0.0f, 1.0f, 0.0f},
-        1.0f
-    };
+	AABB aabb1{
+	    .min{-0.5f, -0.5f, -0.5f},
+	    .max{0.0f,  0.0f,  0.0f },
+	};
+	AABB aabb2{
+	    .min{0.2f, 0.2f, 0.2f},
+	    .max{1.0f, 1.0f, 1.0f},
+	};
 	unsigned int color = WHITE;
 
 	Vector3 cameraTranslate{0.0f, 1.9f, -6.49f};
@@ -609,15 +668,24 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		/// ↓更新処理ここから
 		///
 
+		aabb1.min.x = (std::min)(aabb1.min.x, aabb1.max.x);
+		aabb1.max.x = (std::max)(aabb1.min.x, aabb1.max.x);
+		aabb1.min.y = (std::min)(aabb1.min.y, aabb1.max.y);
+		aabb1.max.y = (std::max)(aabb1.min.y, aabb1.max.y);
+		aabb1.min.z = (std::min)(aabb1.min.z, aabb1.max.z);
+		aabb1.max.z = (std::max)(aabb1.min.z, aabb1.max.z);
+		aabb2.min.x = (std::min)(aabb2.min.x, aabb2.max.x);
+		aabb2.max.x = (std::max)(aabb2.min.x, aabb2.max.x);
+		aabb2.min.y = (std::min)(aabb2.min.y, aabb2.max.y);
+		aabb2.max.y = (std::max)(aabb2.min.y, aabb2.max.y);
+		aabb2.min.z = (std::min)(aabb2.min.z, aabb2.max.z);
+		aabb2.max.z = (std::max)(aabb2.min.z, aabb2.max.z);
+
 		// WorldMatrix
 		Matrix4x4 worldMatrix =
 		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f});
 		Matrix4x4 cameraMatrix =
 		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, cameraRotate, cameraTranslate);
-		Matrix4x4 planeWorldMatrix =
-		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f});
-		Matrix4x4 sphereWorldMatrix =
-		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {sphere.center});
 
 		// ViewMatrix
 		Matrix4x4 viewMatrix = Inverse(cameraMatrix);
@@ -629,26 +697,23 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		// WVPMatrix
 		Matrix4x4 worldViewprojectionMatrix =
 		    Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
-		Matrix4x4 planeWorldViewprojectionMatrix =
-		    Multiply(planeWorldMatrix, Multiply(viewMatrix, projectionMatrix));
-		Matrix4x4 sphereWorldViewprojectionMatrix =
-		    Multiply(sphereWorldMatrix, Multiply(viewMatrix, projectionMatrix));
 
 		// ViewportMatrixを作る
 		Matrix4x4 viewportMatrix = MakeViewportMatrix(0, 0, 1280.0f, 720.0f, 0.0f, 1.0f);
 
-		if (IsCollision(sphere, plane)) {
+		if (IsCollision(aabb1, aabb2)) {
 			color = RED;
 		} else {
 			color = WHITE;
 		}
 
 		ImGui::Begin("Window");
-		ImGui::DragFloat3("Sphere.Center", &sphere.center.x, 0.01f);
-		ImGui::DragFloat("Sphere.Radius", &sphere.radius, 0.01f);
-		ImGui::DragFloat3("Plane.Normal", &plane.normal.x, 0.01f);
-		ImGui::DragFloat("Plane.Distance", &plane.distance, 0.01f);
-		plane.normal = Normalize(plane.normal);
+		ImGui::DragFloat3("CameraTranslate", &cameraTranslate.x, 0.01f);
+		ImGui::DragFloat3("CameraRotate", &cameraRotate.x, 0.01f);
+		ImGui::DragFloat3("AABB1.min", &aabb1.min.x, 0.01f);
+		ImGui::DragFloat3("AABB1.max", &aabb1.max.x, 0.01f);
+		ImGui::DragFloat3("AABB2.min", &aabb2.min.x, 0.01f);
+		ImGui::DragFloat3("AABB2.max", &aabb2.max.x, 0.01f);
 		ImGui::End();
 
 		///
@@ -660,8 +725,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 
 		DrawGrid(worldViewprojectionMatrix, viewportMatrix);
-		DrawPlane(plane, planeWorldViewprojectionMatrix, viewportMatrix, WHITE);
-		DrawSphere(sphere, sphereWorldViewprojectionMatrix, viewportMatrix, color);
+		DrawAABB(aabb1, worldViewprojectionMatrix, viewportMatrix, color);
+		DrawAABB(aabb2, worldViewprojectionMatrix, viewportMatrix, WHITE);
 
 		///
 		/// ↑描画処理ここまで
