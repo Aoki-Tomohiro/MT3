@@ -572,6 +572,29 @@ bool IsCollision(const AABB& aabb, const Sphere& sphere) {
 	return false;
 }
 
+bool IsCollision(const AABB& aabb, const Segment& segment) { 
+	float tXmin = (aabb.min.x - segment.origin.x) / segment.diff.x;
+	float tXmax = (aabb.max.x - segment.origin.x) / segment.diff.x;
+	float tYmin = (aabb.min.y - segment.origin.y) / segment.diff.y;
+	float tYmax = (aabb.max.y - segment.origin.y) / segment.diff.y;
+	float tZmin = (aabb.min.z - segment.origin.z) / segment.diff.z;
+	float tZmax = (aabb.max.z - segment.origin.z) / segment.diff.z;
+	float tNearX = min(tXmin, tXmax);
+	float tNearY = min(tYmin, tYmax);
+	float tNearZ = min(tZmin, tZmax);
+	float tFarX = max(tXmin, tXmax);
+	float tFarY = max(tYmin, tYmax);
+	float tFarZ = max(tZmin, tZmax);
+	//AABBとの衝突点(貫通点)のtが小さい方
+	float tmin = max(max(tNearX, tNearY), tNearZ);
+	//AABBとの衝突点(貫通点)のtが大きい方
+	float tmax = min(min(tFarX, tFarY), tFarZ);
+	if (tmin <= tmax) {
+		return true;
+	}
+	return false;
+}
+
 Vector3 Perpendicular(const Vector3& vector) {
 	if (vector.x != 0.0f || vector.y != 0.0f) {
 		return {-vector.y, vector.x, 0.0f};
@@ -654,15 +677,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	const int kWindowWidth = 1280;
 	const int kWindowHeight = 720;
 
-	Sphere sphere{
-	    .center{0.0f, 0.0f, 0.0f},
-        .radius{1.0f}
-    };
-
 	AABB aabb{
 	    .min{-0.5f, -0.5f, -0.5f},
-	    .max{0.0f,  0.0f,  0.0f },
+	    .max{0.5f,  0.5f,  0.5f },
 	};
+
+	Segment segment{
+	    .origin{-0.7f, 0.3f,  0.0f},
+        .diff{2.0f,  -0.5f, 0.0f}
+    };
+
 	unsigned int color = WHITE;
 
 	Vector3 cameraTranslate{0.0f, 1.9f, -6.49f};
@@ -697,8 +721,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f});
 		Matrix4x4 cameraMatrix =
 		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, cameraRotate, cameraTranslate);
-		Matrix4x4 sphereWorldMatrix =
-		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, sphere.center);
 
 		// ViewMatrix
 		Matrix4x4 viewMatrix = Inverse(cameraMatrix);
@@ -710,13 +732,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		// WVPMatrix
 		Matrix4x4 worldViewprojectionMatrix =
 		    Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
-		Matrix4x4 sphereWorldViewprojectionMatrix =
-		    Multiply(sphereWorldMatrix, Multiply(viewMatrix, projectionMatrix));
 
 		// ViewportMatrixを作る
 		Matrix4x4 viewportMatrix = MakeViewportMatrix(0, 0, 1280.0f, 720.0f, 0.0f, 1.0f);
 
-		if (IsCollision(aabb, sphere)) {
+		if (IsCollision(aabb, segment)) {
 			color = RED;
 		} else {
 			color = WHITE;
@@ -727,8 +747,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::DragFloat3("CameraRotate", &cameraRotate.x, 0.01f);
 		ImGui::DragFloat3("AABB1.min", &aabb.min.x, 0.01f);
 		ImGui::DragFloat3("AABB1.max", &aabb.max.x, 0.01f);
-		ImGui::DragFloat3("Sphere.center", &sphere.center.x, 0.01f);
-		ImGui::DragFloat("Sphere.radius", &sphere.radius, 0.01f);
+		ImGui::DragFloat3("segment.origin", &segment.origin.x, 0.01f);
+		ImGui::DragFloat3("segment.diff", &segment.diff.x, 0.01f);
 		ImGui::End();
 
 		///
@@ -740,8 +760,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 
 		DrawGrid(worldViewprojectionMatrix, viewportMatrix);
-		DrawSphere(sphere, sphereWorldViewprojectionMatrix, viewportMatrix, WHITE);
 		DrawAABB(aabb, worldViewprojectionMatrix, viewportMatrix, color);
+		Vector3 start =
+		    Transform(Transform(segment.origin, worldViewprojectionMatrix), viewportMatrix);
+		Vector3 end = Transform(
+		    Transform(Add(segment.origin, segment.diff), worldViewprojectionMatrix),
+		    viewportMatrix);
+		Novice::DrawLine(int(start.x), int(start.y), int(end.x), int(end.y), WHITE);
 
 		///
 		/// ↑描画処理ここまで
