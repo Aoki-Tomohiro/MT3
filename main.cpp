@@ -5,6 +5,7 @@
 #include "ImGuiManager.h"
 #include <cassert>
 #include <cstdint>
+#include <algorithm>
 
 const char kWindowTitle[] = "LE2B_01_アオキ_トモヒロ_MT3";
 
@@ -556,6 +557,21 @@ bool IsCollision(const AABB& aabb1, const AABB& aabb2) {
 	return false;
 }
 
+bool IsCollision(const AABB& aabb, const Sphere& sphere) {
+	//最近接点を求める
+	Vector3 closestPoint{
+	    std::clamp(sphere.center.x, aabb.min.x, aabb.max.x),
+	    std::clamp(sphere.center.y, aabb.min.y, aabb.max.y),
+	    std::clamp(sphere.center.z, aabb.min.z, aabb.max.z)};
+	//最近接点と球の中心との距離を求める
+	float distance = Length(Subtract(closestPoint, sphere.center));
+	//距離が半径よりも小さければ衝突
+	if (distance <= sphere.radius) {
+		return true;
+	}
+	return false;
+}
+
 Vector3 Perpendicular(const Vector3& vector) {
 	if (vector.x != 0.0f || vector.y != 0.0f) {
 		return {-vector.y, vector.x, 0.0f};
@@ -638,13 +654,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	const int kWindowWidth = 1280;
 	const int kWindowHeight = 720;
 
-	AABB aabb1{
+	Sphere sphere{
+	    .center{0.0f, 0.0f, 0.0f},
+        .radius{1.0f}
+    };
+
+	AABB aabb{
 	    .min{-0.5f, -0.5f, -0.5f},
 	    .max{0.0f,  0.0f,  0.0f },
-	};
-	AABB aabb2{
-	    .min{0.2f, 0.2f, 0.2f},
-	    .max{1.0f, 1.0f, 1.0f},
 	};
 	unsigned int color = WHITE;
 
@@ -668,24 +685,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		/// ↓更新処理ここから
 		///
 
-		aabb1.min.x = (std::min)(aabb1.min.x, aabb1.max.x);
-		aabb1.max.x = (std::max)(aabb1.min.x, aabb1.max.x);
-		aabb1.min.y = (std::min)(aabb1.min.y, aabb1.max.y);
-		aabb1.max.y = (std::max)(aabb1.min.y, aabb1.max.y);
-		aabb1.min.z = (std::min)(aabb1.min.z, aabb1.max.z);
-		aabb1.max.z = (std::max)(aabb1.min.z, aabb1.max.z);
-		aabb2.min.x = (std::min)(aabb2.min.x, aabb2.max.x);
-		aabb2.max.x = (std::max)(aabb2.min.x, aabb2.max.x);
-		aabb2.min.y = (std::min)(aabb2.min.y, aabb2.max.y);
-		aabb2.max.y = (std::max)(aabb2.min.y, aabb2.max.y);
-		aabb2.min.z = (std::min)(aabb2.min.z, aabb2.max.z);
-		aabb2.max.z = (std::max)(aabb2.min.z, aabb2.max.z);
+		aabb.min.x = (std::min)(aabb.min.x, aabb.max.x);
+		aabb.max.x = (std::max)(aabb.min.x, aabb.max.x);
+		aabb.min.y = (std::min)(aabb.min.y, aabb.max.y);
+		aabb.max.y = (std::max)(aabb.min.y, aabb.max.y);
+		aabb.min.z = (std::min)(aabb.min.z, aabb.max.z);
+		aabb.max.z = (std::max)(aabb.min.z, aabb.max.z);
 
 		// WorldMatrix
 		Matrix4x4 worldMatrix =
 		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f});
 		Matrix4x4 cameraMatrix =
 		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, cameraRotate, cameraTranslate);
+		Matrix4x4 sphereWorldMatrix =
+		    MakeAffineMatrix({1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, sphere.center);
 
 		// ViewMatrix
 		Matrix4x4 viewMatrix = Inverse(cameraMatrix);
@@ -697,11 +710,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		// WVPMatrix
 		Matrix4x4 worldViewprojectionMatrix =
 		    Multiply(worldMatrix, Multiply(viewMatrix, projectionMatrix));
+		Matrix4x4 sphereWorldViewprojectionMatrix =
+		    Multiply(sphereWorldMatrix, Multiply(viewMatrix, projectionMatrix));
 
 		// ViewportMatrixを作る
 		Matrix4x4 viewportMatrix = MakeViewportMatrix(0, 0, 1280.0f, 720.0f, 0.0f, 1.0f);
 
-		if (IsCollision(aabb1, aabb2)) {
+		if (IsCollision(aabb, sphere)) {
 			color = RED;
 		} else {
 			color = WHITE;
@@ -710,10 +725,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::Begin("Window");
 		ImGui::DragFloat3("CameraTranslate", &cameraTranslate.x, 0.01f);
 		ImGui::DragFloat3("CameraRotate", &cameraRotate.x, 0.01f);
-		ImGui::DragFloat3("AABB1.min", &aabb1.min.x, 0.01f);
-		ImGui::DragFloat3("AABB1.max", &aabb1.max.x, 0.01f);
-		ImGui::DragFloat3("AABB2.min", &aabb2.min.x, 0.01f);
-		ImGui::DragFloat3("AABB2.max", &aabb2.max.x, 0.01f);
+		ImGui::DragFloat3("AABB1.min", &aabb.min.x, 0.01f);
+		ImGui::DragFloat3("AABB1.max", &aabb.max.x, 0.01f);
+		ImGui::DragFloat3("Sphere.center", &sphere.center.x, 0.01f);
+		ImGui::DragFloat("Sphere.radius", &sphere.radius, 0.01f);
 		ImGui::End();
 
 		///
@@ -725,8 +740,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 
 		DrawGrid(worldViewprojectionMatrix, viewportMatrix);
-		DrawAABB(aabb1, worldViewprojectionMatrix, viewportMatrix, color);
-		DrawAABB(aabb2, worldViewprojectionMatrix, viewportMatrix, WHITE);
+		DrawSphere(sphere, sphereWorldViewprojectionMatrix, viewportMatrix, WHITE);
+		DrawAABB(aabb, worldViewprojectionMatrix, viewportMatrix, color);
 
 		///
 		/// ↑描画処理ここまで
